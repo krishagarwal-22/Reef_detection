@@ -1,19 +1,8 @@
-# ============================================================
-#  REEF SEGMENTATION — COLAB VERSION with a TRUE HELD-OUT TEST SET
-#  Splits data into TRAIN / VALIDATION / TEST.
-#   - TRAIN: model learns on these
-#   - VAL  : used only to pick the best epoch (checkpoint)
-#   - TEST : COMPLETELY UNSEEN. Never touched until the final score.
-#  Prints metrics on BOTH val and the untouched test set.
-#
-#  Enable GPU: Runtime > Change runtime type > GPU > Save
-#  Make zip: right-click reef_dataset > Send to > Compressed (zip) folder
-# ============================================================
 import os, glob, random, zipfile, io
 import numpy as np
 from PIL import Image
 
-# ---------- 1. UPLOAD ----------
+# ---------- 1. UPLOADING THE FILES ----------
 from google.colab import files
 print(">>> Choose your reef_dataset.zip to upload...")
 up = files.upload()
@@ -29,7 +18,7 @@ IMG_DIR, MASK_DIR = find_dir("images"), find_dir("masks")
 assert IMG_DIR and MASK_DIR, "images/ and masks/ not found in zip."
 print("images:", IMG_DIR, "| masks:", MASK_DIR)
 
-# ---------- 2. SETUP ----------
+# ---------- 2. SETTTING UP THE MODEL ----------
 import torch, torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -52,7 +41,7 @@ class ReefData(Dataset):
         if s.aug and random.random()<0.5: img=img[:,::-1].copy(); msk=msk[:,::-1].copy()
         return torch.from_numpy(img)[None], torch.from_numpy(msk)[None]
 
-# ---------- 4. U-NET ----------
+# ---------- 4. USING U-NET ----------
 class DC(nn.Module):
     def __init__(s,i,o):
         super().__init__(); s.n=nn.Sequential(
@@ -91,7 +80,7 @@ def metrics(model,loader):
     pr=tp/(tp+fp+1e-9);rc=tp/(tp+fn+1e-9);f1=2*pr*rc/(pr+rc+1e-9)
     return dict(dice=float(np.mean(D)),iou=float(np.mean(I)),precision=pr,recall=rc,f1=f1)
 
-# ---------- 5. SPLIT: train / val / TEST ----------
+# ---------- 5. SPLITING THE DATA IN : train / val / TEST ----------
 imgs=sorted(glob.glob(os.path.join(IMG_DIR,"*.png")))
 imgs=[p for p in imgs if os.path.exists(os.path.join(MASK_DIR,os.path.basename(p)))]
 masks=[os.path.join(MASK_DIR,os.path.basename(p)) for p in imgs]
@@ -124,7 +113,7 @@ for ep in range(EPOCHS):
     if (ep+1)%10==0 or ep==0: print(f"epoch {ep+1:3d}  val Dice {mv['dice']:.3f}")
     if mv['dice']>best: best=mv['dice']; torch.save(model.state_dict(),"best_model.pt"); best_val=mv
 
-# ---------- 7. FINAL: score the UNTOUCHED test set ----------
+# ---------- 7. FINAL: score ON the UNTOUCHED test set ----------
 model.load_state_dict(torch.load("best_model.pt"))
 test_m = metrics(model, tst)      # first and only time the test set is used
 
